@@ -1,7 +1,30 @@
 FileVersion = 1
 
 [Project]
-Name = "BuildScriptTools"
+Name = "BuildTools"
 
 [Configs.Debug.Win64]
-LibPaths = ["$(ProjectDir)/dist/git2.lib", "$(ProjectDir)/dist/zlib.lib", "$(ProjectDir)/dist/pcre.lib", "$(ProjectDir)/dist/http-parser.lib", "Crypt32.lib", "Winhttp.lib", "Ole32.lib", "Advapi32.lib", "Rpcrt4.lib"]
+LibPaths = [
+    "$(ProjectDir)/dist/git2.lib",
+    "$(ProjectDir)/dist/zlib.lib",
+    "$(ProjectDir)/dist/pcre.lib",
+    "$(ProjectDir)/dist/http-parser.lib",
+    "Crypt32.lib",
+    "Winhttp.lib",
+    "Ole32.lib",
+    "Advapi32.lib",
+    "Rpcrt4.lib"
+]
+
+[Configs.Release.Win64]
+LibPaths = [
+    "$(ProjectDir)/dist/git2.lib",
+    "$(ProjectDir)/dist/zlib.lib",
+    "$(ProjectDir)/dist/pcre.lib",
+    "$(ProjectDir)/dist/http-parser.lib",
+    "Crypt32.lib",
+    "Winhttp.lib",
+    "Ole32.lib",
+    "Advapi32.lib",
+    "Rpcrt4.lib"
+]

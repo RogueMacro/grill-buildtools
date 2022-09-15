@@ -1,4 +1,4 @@
 [Package]
-Name = "BuildScriptTools"
-Version = "0.1.0"
-Description = "BuildScript tools for Grill packages"
+Name = "BuildTools"
+Version = "0.2.0"
+Description = "Build tools for Grill packages"
