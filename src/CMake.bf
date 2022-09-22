@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Diagnostics;
 
 namespace BuildTools
 {
@@ -7,30 +8,21 @@ namespace BuildTools
 	{
 		public class Command
 		{
-			public int32 ExitCode { get; private set; };
-			private String OutputFilePath ~ delete _;
+			public int ExitCode { get; private set; };
+			private FileStream OutputStream ~ if (_ != null) delete _;
 
-			public ~this()
-			{
-				File.Delete(OutputFilePath);
-			}
-
-			private void Set(int32 exitCode, String outputFilePath)
+			private void Set(int exitCode, FileStream outputStream)
 			{
 				ExitCode = exitCode;
-				OutputFilePath = outputFilePath;
+				OutputStream = outputStream;
 			}
 
-			public Result<void, FileError> ReadOutput(String buffer)
+			public Result<void> ReadOutput(String buffer)
 			{
-				return File.ReadAllText(OutputFilePath, buffer);
+				if (OutputStream == null)
+					return .Err;
+				return scope StreamReader(OutputStream).ReadToEnd(buffer);
 			}
-		}
-
-		public enum CommandError
-		{
-			PipeError,
-			ProcessCreationError,
 		}
 
 		public static bool IsAvailable
@@ -38,67 +30,33 @@ namespace BuildTools
 			get => Run("--version") case .Ok;
 		}
 
-		public static Result<void, CommandError> Run(StringView args, bool redirectStdout = false)
+		public static Result<void> Run(StringView args, bool captureOutput = true)
 		{
-			return Run(args, scope .(), redirectStdout);
+			return Run(args, scope .(), captureOutput);
 		}
 
-		public static Result<void, CommandError> Run(StringView args, Command outCommand, bool redirectStdout = false)
+		public static Result<void> Run(StringView args, Command outCommand, bool captureOutput = true)
 		{
-			var sa = SecurityAttributes();
-			sa.[Friend]mInheritHandle = 1;
+			ProcessStartInfo psi = scope .();
+			
+			psi.UseShellExecute = false;
+			psi.CreateNoWindow = captureOutput;
+			psi.RedirectStandardOutput = captureOutput;
+			psi.SetFileName("cmake");
+			psi.SetArguments(args);
+			
+			SpawnedProcess process = scope .();
+			if (process.Start(psi) case .Err)
+				return .Err;
 
-			Windows.Handle childStdOutRd = Windows.Handle.NullHandle;
-			Windows.Handle childStdOutWr = Windows.Handle.NullHandle;
-			if (!Windows.CreatePipe(out childStdOutRd, out childStdOutWr, &sa, 0))
-				return .Err(.PipeError);
-
-			var pi = Windows.ProcessInformation();
-			var si = Windows.StartupInfo();
-			si.mStdError = (.)childStdOutWr;
-			si.mStdOutput = (.)childStdOutWr;
-			si.mShowWindow = Windows.SW_HIDE;
-			si.mFlags |= Windows.STARTF_USESTDHANDLES;
-			si.mFlags |= 0x00000001; // STARTF_USESSHOWWINDOW
-
-			if (!Windows.CreateProcessA(null, scope $"cmake {args}", null, null, true, 0x00000010, null, null, &si, &pi))
-				return .Err(.ProcessCreationError);
-
-			Windows.CloseHandle(childStdOutWr);
-
-			let outputFilePath = Path.GetTempPath(.. new .());
-			Path.InternalCombine(outputFilePath, "grill-cmake");
-			if (!Directory.Exists(outputFilePath))
-				Directory.CreateDirectory(outputFilePath);
-			Path.InternalCombine(outputFilePath, scope Random().NextU32().ToString(.. scope .()));
-
-			int32 dwRead, dwWritten;
-			char8[1024] chBuf;
-			Windows.IntBool success = false;
-			Windows.Handle parentStdOut = Windows.CreateFileA(outputFilePath, Windows.GENERIC_WRITE, 0, null, FileMode.OpenOrCreate, 0x100, Windows.Handle.NullHandle);
-
-			while (true)
+			FileStream fs = null;
+			if (captureOutput)
 			{
-				success = (.)Windows.ReadFile(childStdOutRd, (.)&chBuf, 1024, out dwRead, null);
-				if (!success || dwRead == 0) break;
-
-				if (redirectStdout)
-					Windows.WriteFile(Windows.GetStdHandle(Windows.STD_OUTPUT_HANDLE), (.)&chBuf, dwRead, out dwWritten, null);
-
-				success = (.)Windows.WriteFile(parentStdOut, (.)&chBuf, dwRead, out dwWritten, null);
-				if (!success) break;
-
+				fs = new .();
+				process.AttachStandardOutput(fs);
 			}
 
-			let exitCode = Windows.WaitForSingleObject(pi.mProcess, int32.MaxValue);
-
-			Windows.CloseHandle(childStdOutRd);
-			Windows.CloseHandle(parentStdOut);
-			Windows.CloseHandle(pi.mProcess);
-			Windows.CloseHandle(pi.mThread);
-
-
-			outCommand.[Friend]Set(exitCode, outputFilePath);
+			outCommand.[Friend]Set(process.ExitCode, fs);
 			return .Ok;
 		}
 	}
