@@ -1,7 +1,7 @@
 using System;
-using BuildTools.Git.Raw;
 using System.IO;
 using System;
+using static BuildTools.Git.Git;
 
 namespace BuildTools
 {
@@ -19,20 +19,20 @@ namespace BuildTools
 
 		public static GitErrorCode Clone(StringView url, StringView path)
 		{
-			void* repo = ?;
-			return git_clone(&repo, scope String(url).CStr(), scope String(path).CStr(), null);
+			git_repository* repo = ?;
+			return git_clone(out repo, scope String(url).CStr(), scope String(path).CStr(), null);
 		}
 
 		public static GitError GetLastError()
 		{
 			let raw = giterr_last();
-			return .() { Message = .(raw.Message), ErrorClass = (.)raw.Klass };
+			return .() { Message = .(raw.Message), ErrorClass = (.)raw.ErrorClass };
 		}
 
 		public static Result<void, GitErrorCode> UpdateSubmodules(StringView path = ".", bool recursive = false)
 		{
-			void* repo = null;
-			git_repository_open(&repo, scope String(path).CStr());
+			git_repository* repo = null;
+			git_repository_open(out repo, scope String(path).CStr());
 			return UpdateSubmodules(repo, path, recursive);
 		}
 
@@ -51,19 +51,19 @@ namespace BuildTools
 					if (url == null)
 						return (.)GitErrorCode.GIT_ERROR;
 
-					void* subrepo = null;
+					git_repository* subrepo = null;
 					let submodule_path = StringView(git_submodule_path(submodule));
 					let path = Path.InternalCombine(.. scope .(), payload.path, submodule_path);
 
 					var clone_options = git_clone_options();
 					clone_options.checkout_opts.checkout_strategy = .GIT_CHECKOUT_NONE;
-					let clone_result = git_clone(&subrepo, url, path.CStr(), &clone_options);
+					let clone_result = git_clone(out subrepo, url, path.CStr(), &clone_options);
 					if (clone_result != .GIT_OK)
 					{
 						if (clone_result != .GIT_EEXISTS)
 							return (.)clone_result;
 
-						let open_result = git_repository_open(&subrepo, path.CStr());
+						let open_result = git_repository_open(out subrepo, path.CStr());
 						if (open_result != .GIT_OK)
 							return (.)open_result;
 					}
