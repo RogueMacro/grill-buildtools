@@ -13,8 +13,6 @@ namespace BuildTools.Git
 {
 	public static class Git
 	{
-		typealias Oid = uint8[20];
-
 		[CLink, CallingConvention(.Stdcall)]
 		public static extern GitErrorCode git_submodule_update(void* submodule, int32 init, void* options);
 
@@ -43,13 +41,13 @@ namespace BuildTools.Git
 		public static extern GitErrorCode git_revwalk_push_ref(void* revwalk, char8* refname);
 
 		[CLink, CallingConvention(.Stdcall)]
-		public static extern GitErrorCode git_revwalk_next(Oid* out_oid, void* revwalk);
+		public static extern GitErrorCode git_revwalk_next(git_oid* out_oid, void* revwalk);
 
 		[CLink, CallingConvention(.Stdcall)]
-		public static extern GitErrorCode git_reference_set_target(void** out_ref, void* reference, Oid* id, char8* log_message);
+		public static extern GitErrorCode git_reference_set_target(void** out_ref, void* reference, git_oid* id, char8* log_message);
 
 		[CLink, CallingConvention(.Stdcall)]
-		public static extern GitErrorCode git_repository_set_head_detached(void* repo, Oid* committish);
+		public static extern GitErrorCode git_repository_set_head_detached(void* repo, git_oid* committish);
 
 		[CLink, CallingConvention(.Stdcall)]
 		public static extern GitErrorCode git_repository_set_head(void* repo, char8* refname);
@@ -58,10 +56,16 @@ namespace BuildTools.Git
 		public static extern GitErrorCode git_checkout_head(void* repo, void* opts);
 
 		[CLink, CallingConvention(.Stdcall)]
-		public static extern GitErrorCode git_checkout_tree(void* repo, void* object, void* opts);
+		public static extern GitErrorCode git_checkout_tree(void* repo, void* object, git_checkout_options* opts);
+
+		[CLink, CallingConvention(.Stdcall)]
+		public static extern GitErrorCode git_reset_from_annotated(void* repo, git_annotated_commit* commit, git_reset_t reset_type, git_checkout_options* checkout_opts);
 
 		[CLink, CallingConvention(.Stdcall)]
 		public static extern GitErrorCode git_repository_free(void* repo);
+
+		[CLink, CallingConvention(.Stdcall)]
+		public static extern GitErrorCode git_annotated_commit_free(git_annotated_commit* commit);
 
 		[CLink, CallingConvention(.Stdcall)]
 		public static extern GitErrorCode git_revwalk_free(void* revwalk);
@@ -73,7 +77,7 @@ namespace BuildTools.Git
 		public static extern GitErrorCode git_tag_foreach(void* repo, function int32(char8* name, void* oid, void* payload) callback, void* payload);
 
 		[CLink, CallingConvention(.Stdcall)]
-		public static extern Oid* git_submodule_index_id(void* submodule);
+		public static extern git_oid* git_submodule_index_id(void* submodule);
 
 		[CLink, CallingConvention(.Stdcall)]
 		public static extern GitErrorCode submodule_repo_init(void** out_repo, void* parent_repo, char8* path, char8* url, bool use_gitlink);
@@ -83,6 +87,9 @@ namespace BuildTools.Git
 
 		[CLink, CallingConvention(.Stdcall)]
 		public static extern char8* git_submodule_path(void* submodule);
+
+		[CLink, CallingConvention(.Stdcall)]
+		public static extern GitErrorCode git_merge(git_repository* repo, git_annotated_commit** their_heads, int their_heads_len, void* merge_opts, git_checkout_options* checkout_opts);
 
 		[CRepr, Reflect(.StaticFields)]
 		public enum GitErrorCode
@@ -198,13 +205,71 @@ namespace BuildTools.Git
 				public struct git_remote;
 				public struct git_object;
 				public struct git_refspec;
-				public struct git_proxy_options;
 				public struct git_transport;
 				public struct git_packbuilder;
 				public struct git_revwalk;
 				public struct git_diff_file;
 				public struct git_tree;
 				public struct git_tag;
+
+		[CRepr]
+		public struct git_proxy_options
+		{
+			uint version = 1;
+
+			/**
+			 * The type of proxy to use, by URL, auto-detect.
+			 */
+			git_proxy_t type;
+
+			/**
+			 * The URL of the proxy.
+			 */
+			char8* url;
+
+			/**
+			 * This will be called if the remote host requires
+			 * authentication in order to connect to it.
+			 *
+			 * Returning GIT_PASSTHROUGH will make libgit2 behave as
+			 * though this field isn't set.
+			 */
+			git_credential_acquire_cb credentials;
+
+			/**
+			 * If cert verification fails, this will be called to let the
+			 * user make the final decision of whether to allow the
+			 * connection to proceed. Returns 0 to allow the connection
+			 * or a negative value to indicate an error.
+			 */
+			git_transport_certificate_check_cb certificate_check;
+
+			/**
+			 * Payload to be provided to the credentials and certificate
+			 * check callbacks.
+			 */
+			void *payload;
+		}
+
+		[CRepr]
+		public enum git_proxy_t : c_int {
+			/**
+			 * Do not attempt to connect through a proxy
+			 *
+			 * If built against libcurl, it itself may attempt to connect
+			 * to a proxy if the environment variables specify it.
+			 */
+			GIT_PROXY_NONE,
+			/**
+			 * Try to auto-detect the proxy from the git configuration.
+			 */
+			GIT_PROXY_AUTO,
+			/**
+			 * Connect via the URL given in the options
+			 */
+			GIT_PROXY_SPECIFIED
+		}
+
 
 				/** Time in a signature */
 				public struct git_time
@@ -990,6 +1055,7 @@ namespace BuildTools.Git
 				 * @param src oid structure to copy from.
 				 * @return 0 on success or error code
 				 */
+				[CLink]
 				public static extern GitErrorCode git_oid_cpy(git_oid *outVal, git_oid *src);
 
 				/**
@@ -1896,6 +1962,7 @@ namespace BuildTools.Git
 				 *
 				 * @param repo repository handle to close. If NULL nothing occurs.
 				 */
+		[CLink]
 				public static extern void git_repository_free(git_repository *repo);
 			
 				/**
@@ -2379,10 +2446,13 @@ namespace BuildTools.Git
 				 * @return 0 on success, non-zero callback return value, GIT_ENOTFOUND if
 				 *         there is no FETCH_HEAD file, or other error code.
 				 */
+		[CLink]
 				public static extern GitErrorCode git_repository_fetchhead_foreach(
 					git_repository *repo,
 					git_repository_fetchhead_foreach_cb callback,
 					void *payload);
+
+
 			
 				/**
 				 * Callback used to iterate over each MERGE_HEAD entry
@@ -2480,6 +2550,7 @@ namespace BuildTools.Git
 				 * @param commitish Object id of the Commit the HEAD should point to
 				 * @return 0 on success, or an error code
 				 */
+				[CLink]
 				public static extern GitErrorCode git_repository_set_head_detached(
 					git_repository* repo,
 					git_oid* commitish);
@@ -2499,6 +2570,9 @@ namespace BuildTools.Git
 				public static extern GitErrorCode git_repository_set_head_detached_from_annotated(
 					git_repository *repo,
 					git_annotated_commit *commitish);
+
+				[CLink]
+				public static extern GitErrorCode git_annotated_commit_lookup(git_annotated_commit** _out, git_repository* repo, git_oid* id);
 			
 				/**
 				 * Detach the HEAD.
@@ -2540,6 +2614,13 @@ namespace BuildTools.Git
 					GIT_REPOSITORY_STATE_REBASE_MERGE,
 					GIT_REPOSITORY_STATE_APPLY_MAILBOX,
 					GIT_REPOSITORY_STATE_APPLY_MAILBOX_OR_REBASE,
+				}
+
+				public enum git_reset_t : c_int
+				{
+					GIT_RESET_SOFT = 1,
+					GIT_RESET_MIXED = 2,
+					GIT_RESET_HARD = 3
 				}
 			
 				/**
@@ -2998,6 +3079,7 @@ namespace BuildTools.Git
 				 *
 				 * @param remote the remote to free
 				 */
+				[CLink]
 				public static extern void git_remote_free(git_remote *remote);
 
 				/**
@@ -3097,7 +3179,7 @@ namespace BuildTools.Git
 				 */
 				struct git_remote_callbacks
 				{
-					public c_uint version; /**< The version */
+					public c_uint version = 1; /**< The version */
 
 					/**
 					 * Textual progress from the remote. Text send over the
@@ -3254,23 +3336,23 @@ namespace BuildTools.Git
 				 */
 				public struct git_fetch_options
 				{
-					c_int version;
+					c_int version = 1;
 
 					/**
 					 * Callbacks to use for this fetch operation
 					 */
-					git_remote_callbacks callbacks;
+					git_remote_callbacks callbacks = .();
 
 					/**
 					 * Whether to perform a prune after the fetch
 					 */
-					git_fetch_prune_t prune;
+					git_fetch_prune_t prune = .GIT_FETCH_PRUNE_UNSPECIFIED;
 
 					/**
 					 * Whether to write the results to FETCH_HEAD. Defaults to
 					 * on. Leave this default in order to behave like git.
 					 */
-					int update_fetchhead;
+					int update_fetchhead = 1;
 
 					/**
 					 * Determines how to behave regarding tags on the remote, such
@@ -3279,12 +3361,12 @@ namespace BuildTools.Git
 					 *
 					 * The default is to auto-follow tags.
 					 */
-					git_remote_autotag_option_t download_tags;
+					git_remote_autotag_option_t download_tags = .GIT_REMOTE_DOWNLOAD_TAGS_UNSPECIFIED;
 
 					/**
 					 * Proxy options to use, by default no proxy is used.
 					 */
-					git_proxy_options proxy_opts;
+					git_proxy_options proxy_opts = .();
 
 					/**
 					 * Extra headers for this fetch operation
@@ -3306,6 +3388,7 @@ namespace BuildTools.Git
 				 * @param version The struct version; pass `GIT_FETCH_OPTIONS_VERSION`.
 				 * @return Zero on success; -1 on failure.
 				 */
+				[CLink, StdCall]
 				public static extern GitErrorCode git_fetch_options_init(
 					git_fetch_options *opts,
 					c_uint version);
@@ -3428,6 +3511,7 @@ namespace BuildTools.Git
 				 *								 default is "fetch"
 				 * @return 0 or an error code
 				 */
+				[CLink]
 				public static extern GitErrorCode git_remote_fetch(
 						git_remote *remote,
 						git_strarray *refspecs,
@@ -3802,7 +3886,7 @@ namespace BuildTools.Git
 				 */
 				public struct git_checkout_options
 				{
-					public c_uint version; /**< The version */
+					public c_uint version = 1; /**< The version */
 
 					public git_checkout_strategy_t checkout_strategy; /**< default will be a safe checkout */
 
@@ -3879,6 +3963,7 @@ namespace BuildTools.Git
 				 * @param version The struct version; pass `GIT_CHECKOUT_OPTIONS_VERSION`.
 				 * @return Zero on success; -1 on failure.
 				 */
+				[CLink, CallingConvention(.Stdcall)]
 				public static extern GitErrorCode git_checkout_options_init(
 					git_checkout_options *opts,
 					c_uint version);
@@ -4016,7 +4101,7 @@ namespace BuildTools.Git
 				 * use `git_clone_options_init`.
 				 *
 				 */
-				struct git_clone_options
+				public struct git_clone_options
 				{
 					public c_uint version;
 
