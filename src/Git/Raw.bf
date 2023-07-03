@@ -1180,6 +1180,7 @@ namespace BuildTools.Git
 				 * progress of indexing a packfile, either directly or part of a
 				 * fetch or clone that downloads a packfile.
 				 */
+				[CRepr]
 				public struct git_indexer_progress
 				{
 					/** number of objects in the packfile being indexed */
@@ -2985,6 +2986,7 @@ namespace BuildTools.Git
 				 * @param remote the remote
 				 * @return the amount of refspecs configured in this remote
 				 */
+				[CLink, CallingConvention(.Stdcall)]
 				public static extern c_size git_remote_refspec_count(git_remote *remote);
 
 				/**
@@ -3171,13 +3173,16 @@ namespace BuildTools.Git
 				 */
 				public function c_int git_url_resolve_cb(git_buf *url_resolved, char8* url, int direction, void *payload);
 
+				public function c_int git_remote_ready_cb(git_remote *remote, c_int direction, void *payload);
+
 				/**
 				 * The callback settings structure
 				 *
 				 * Set the callbacks to be called by the remote when informing the user
 				 * about the progress of the network operations.
 				 */
-				struct git_remote_callbacks
+				[CRepr]
+				public struct git_remote_callbacks
 				{
 					public c_uint version = 1; /**< The version */
 
@@ -3256,6 +3261,8 @@ namespace BuildTools.Git
 					 */
 					public git_transport_cb transport;
 
+					public git_remote_ready_cb remote_ready;
+
 					/**
 					 * This will be passed to each of the callbacks in this struct
 					 * as the last parameter.
@@ -3280,6 +3287,7 @@ namespace BuildTools.Git
 				 * @param version Version of struct; pass `GIT_REMOTE_CALLBACKS_VERSION`
 				 * @return Zero on success; -1 on failure.
 				 */
+				[CLink, CallingConvention(.Stdcall)]
 				public static extern GitErrorCode git_remote_init_callbacks(
 					git_remote_callbacks *opts,
 					c_uint version);
@@ -3334,6 +3342,7 @@ namespace BuildTools.Git
 				 *
 				 *		git_fetch_options opts = GIT_FETCH_OPTIONS_INIT;
 				 */
+				[CRepr]
 				public struct git_fetch_options
 				{
 					c_int version = 1;
@@ -3341,18 +3350,18 @@ namespace BuildTools.Git
 					/**
 					 * Callbacks to use for this fetch operation
 					 */
-					git_remote_callbacks callbacks = .();
+					public git_remote_callbacks callbacks = .();
 
 					/**
 					 * Whether to perform a prune after the fetch
 					 */
-					git_fetch_prune_t prune = .GIT_FETCH_PRUNE_UNSPECIFIED;
+					public git_fetch_prune_t prune = .GIT_FETCH_PRUNE_UNSPECIFIED;
 
 					/**
 					 * Whether to write the results to FETCH_HEAD. Defaults to
 					 * on. Leave this default in order to behave like git.
 					 */
-					int update_fetchhead = 1;
+					public int update_fetchhead = 1;
 
 					/**
 					 * Determines how to behave regarding tags on the remote, such
@@ -3361,17 +3370,17 @@ namespace BuildTools.Git
 					 *
 					 * The default is to auto-follow tags.
 					 */
-					git_remote_autotag_option_t download_tags = .GIT_REMOTE_DOWNLOAD_TAGS_UNSPECIFIED;
+					public git_remote_autotag_option_t download_tags = .GIT_REMOTE_DOWNLOAD_TAGS_UNSPECIFIED;
 
 					/**
 					 * Proxy options to use, by default no proxy is used.
 					 */
-					git_proxy_options proxy_opts = .();
+					public git_proxy_options proxy_opts = .();
 
 					/**
 					 * Extra headers for this fetch operation
 					 */
-					git_strarray custom_headers;
+					public git_strarray custom_headers;
 				}
 
 				//#define GIT_FETCH_OPTIONS_VERSION 1
@@ -3388,7 +3397,7 @@ namespace BuildTools.Git
 				 * @param version The struct version; pass `GIT_FETCH_OPTIONS_VERSION`.
 				 * @return Zero on success; -1 on failure.
 				 */
-				[CLink, StdCall]
+				[CLink, CallingConvention(.Stdcall)]
 				public static extern GitErrorCode git_fetch_options_init(
 					git_fetch_options *opts,
 					c_uint version);
@@ -3544,6 +3553,7 @@ namespace BuildTools.Git
 				/**
 				 * Get the statistics structure that is filled in by the fetch operation.
 				 */
+				[CLink, CallingConvention(.Stdcall)]
 				public static extern git_indexer_progress * git_remote_stats(git_remote *remote);
 
 				/**
@@ -4101,9 +4111,10 @@ namespace BuildTools.Git
 				 * use `git_clone_options_init`.
 				 *
 				 */
+				[CRepr]
 				public struct git_clone_options
 				{
-					public c_uint version;
+					public c_uint version = 1;
 
 					/**
 					 * These options are passed to the checkout step. To disable
